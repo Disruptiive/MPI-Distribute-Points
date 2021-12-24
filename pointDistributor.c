@@ -1,7 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/time.h>
-
+#include <math.h>
+//Fisher–Yates shuffle code from: https://stackoverflow.com/questions/6127503/shuffle-array-in-c
 void shuffle(int *array, size_t n) {    
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -17,6 +18,7 @@ void shuffle(int *array, size_t n) {
         }
     }
 }
+
 void createPoints(char* filename,int points_power_of_2,int procedures_num){
     int64_t n, dims;
     int points_num = pow(2,points_power_of_2);

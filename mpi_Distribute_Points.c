@@ -11,7 +11,7 @@
 #include "mpi.h"
 
 //exchange locally in every procedure sent points with the ones that they received
-double **finish(double *points_received,double median,double **points,int size,int nums_to_transfer,int dimensions,int taskid, double *distance_array,int pointsNum,int low){
+double **finishTransfers(double *points_received,double median,double **points,int size,int nums_to_transfer,int dimensions,int taskid, double *distance_array,int pointsNum,int low){
     int i,j;
     int count = 0;
 
@@ -34,14 +34,14 @@ double **finish(double *points_received,double median,double **points,int size,i
     return points;
 }
 
-//execute transfers based on the transfer table and return the points that were received
+//execute transfers based on the transfer table and return the points after the transfers are done
 double **executeTransfers(double median,double*leader, int **transfer_array,double *pts_to_send,double **points,int size,int low,int high,int taskid,int nums_to_transfer,int dimensions,double *distance_array,int pointsNum){
     int i,j,count,swaps,destination,sender;
     MPI_Request request;
     //allocate 1d array to hold all points received (i used 1d array to be sure that the memory is contiguous when transfering them) 
     double *pts_received = malloc(nums_to_transfer*dimensions*sizeof(double));
 
-    //traversing transfer_array (row-wise of column-wise depending on taskid) execute Sendrecv order between the two procedures and go on until every procedure has sent and received all the points needed
+    //traversing transfer_array (row-wise of column-wise depending on taskid) execute Sendrecv order between the two procedures and go on continue until every procedure has sent and received all the points needed
     count=0;
     if(taskid-low<size/2){
         for(i=0;i<size/2;i++){
@@ -71,7 +71,7 @@ double **executeTransfers(double median,double*leader, int **transfer_array,doub
         }
     }
     //replace locally in every procedure the sent points with the received ones
-    points = finish(pts_received, median, points,size, nums_to_transfer, dimensions, taskid, distance_array, pointsNum, low);
+    points = finishTransfers(pts_received, median, points,size, nums_to_transfer, dimensions, taskid, distance_array, pointsNum, low);
     return points;
 }
 //creates a size/2 x size/2 table with the amount of points that need to be exchanged between procedures
@@ -85,7 +85,7 @@ int **createTransferArray(int *swaps_array, int size){
     }
     i=0;
     j=size-1;
-    //create the transfer table (explanation of how it works in the report)
+    //create the transfer table 
     while(i<size/2 && j>=size/2){
         if(swaps_array[i] > swaps_array[j]){
             transferArray[i][j-size/2] = swaps_array[j];
@@ -243,7 +243,6 @@ double** distributeByMedian(int low,int high,double *leader,int taskid,int point
             median = findMedian(all_distances,arr_size);
         }
 
-  
         MPI_Bcast(&median,1,MPI_DOUBLE,0,new_comm);
         nums_to_transfer = 0;
         
@@ -261,16 +260,12 @@ double** distributeByMedian(int low,int high,double *leader,int taskid,int point
         MPI_Comm_free(&new_comm);
 
         if (taskid==low){
-              //  free(all_distances);   
-                //free(swaps_array);
-                //free(transfer_array);
-                //free(pts_to_send);
-                //free(distance_array);
+            free(all_distances);   
         }
-            //free(transfer_array);
-        // free(pts_to_send);
-
-        
+        free(distance_array);
+        free(swaps_array);
+        free(transfer_array);
+        free(pts_to_send);
     
         return points;
     }
@@ -299,6 +294,7 @@ double** readPoints(int task,int* points_per_procedure,int* dimensions){
             fread(&pts[i][j],sizeof(double),1,f);
         }
     }
+    fclose(f);
     return pts;
 }
 
@@ -317,12 +313,13 @@ double** distributePoints(int low,int high,double *leader,int taskid,int pointsN
     
     return points;
 }
+
 void validate(int taskid,double **points,int low,int high,int dimensions,double *leader,int pointsNum,int proceduresNum,double exec_time){
     int i;
     int size = high-low+1;
     double *distance_array = malloc(pointsNum*sizeof(double));
-    double min = 40;
-    double max = 0; 
+    double min = DBL_MAX;
+    double max = DBL_MIN; 
     double *mins,*maxs;
     for(i=0;i<pointsNum;i++){
         distance_array[i] = calculateDistance(leader,points[i],dimensions);
@@ -340,8 +337,8 @@ void validate(int taskid,double **points,int low,int high,int dimensions,double 
     MPI_Gather(&min,1,MPI_DOUBLE,&mins[taskid],1,MPI_DOUBLE,0,MPI_COMM_WORLD);
     MPI_Gather(&max,1,MPI_DOUBLE,&maxs[taskid],1,MPI_DOUBLE,0,MPI_COMM_WORLD);   
     if (taskid==0){
+        printf("\tRESULTS\n");
         for(i=0;i<proceduresNum;i++){
-            printf("\tRESULTS\n");
             printf("TASK) %d MIN: %lf-MAX: %lf\n",i,mins[i],maxs[i]);
             
         }
@@ -352,8 +349,13 @@ void validate(int taskid,double **points,int low,int high,int dimensions,double 
             }
             
         }
-        printf("Execution Time: %.3lf s, ppp: %d\n",exec_time/1000,pointsNum);
+        printf("Execution Time: %.3lf s\n",exec_time/1000);
     }    
+    free(distance_array);
+    if (taskid==0){
+        free(mins);
+        free(maxs);
+    }
 }
 
 int main (int argc, char *argv[])
