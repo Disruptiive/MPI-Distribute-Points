@@ -14,5 +14,4 @@ using LinearAlgebra, MLDatasets
 train_x, _ = MNIST.traindata()
 test_x,  _ = MNIST.testdata()
 X = Float64.( [reshape(train_x,28*28,:) reshape(test_x,28*28,:)] )
-println(X(1,2))
-write_matrix_binary(X,"mnist.bin")
+write_matrix_binary(X,"points.bin")
